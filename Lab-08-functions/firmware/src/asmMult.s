@@ -19,7 +19,7 @@
 .type nameStr,%gnu_unique_object
     
 /*** STUDENTS: Change the next line to your name!  **/
-nameStr: .asciz "Inigo Montoya"  
+nameStr: .asciz "Robert Nelson"  
 
 .align   /* realign so that next mem allocations are on word boundaries */
  
@@ -82,9 +82,40 @@ final_Product:   .word     0
  *                     specified by r2
  */
 asmUnpack:   
-    
+    push {r4-r11, LR}
     /*** STUDENTS: Place your asmUnpack code BELOW this line!!! **************/
     
+    /***
+     * Copy the value passed into r0 to a new register
+     * This will allow us to manipulate it indendently
+    ***/
+    mov r4, r0
+    /***
+     * Perform an arithmetic shift right by 16 bits
+     * The A bits were previously the 16 MSB, and need to be moved down
+     * ASR also performs the necessary sign extension of A
+     ***/
+    asr r5, r4, 16
+    
+    /* Store the now-unpacked value of A */
+    str r5, [r1]
+    
+    /* Begin with the same process as above moving r0 to new register */
+    mov r4, r0
+    /***
+     * Perform a logical shift left by 16 bits
+     * The B bits are sitting in the LSB but bit 31 is used for sign extension
+     * So an LSL will move the bits to where the B sign value is the MSB
+     * After this, perform an ASR by 16 bits to sign extend the MSB
+     * This process is incredibly similar to A, but with one extra step
+    ***/
+    lsl r5, r4, 16
+    asr r5, r5, 16
+    
+    str r5, [r2]
+    
+    pop {r4-r11, LR}
+    bx LR
     /*** STUDENTS: Place your asmUnpack code ABOVE this line!!! **************/
 
 
@@ -102,7 +133,33 @@ asmUnpack:
 asmAbs:  
 
     /*** STUDENTS: Place your asmAbs code BELOW this line!!! **************/
+    push {r4-r11, LR}
+    /***
+     * Get sign bit of both arguments
+     * Do this by performing a logical shift
+     * We want to fill with leading zeros to get only 1 or 0
+    ***/
+    mov r3, r0
+    lsr r3, 31
     
+    str r3, [r2]
+    
+    /***
+     * Get the absolute value of our arguments
+     * This is done by performing a negation (pseudo-instruction for RSB)
+     * If either argument is zero, that means they are already its abs
+     * Take this value and store it into its respective *_Abs
+    ***/
+    mov r3, r0
+    cmp r3, 0
+    neglt r3, r3
+    
+    str r3, [r1]
+    
+    mov r0, r3
+    
+    pop {r4-r11, LR}
+    bx LR
 
     /*** STUDENTS: Place your asmAbs code ABOVE this line!!! **************/
 
@@ -118,7 +175,40 @@ asmAbs:
 asmMult:   
 
     /*** STUDENTS: Place your asmMult code BELOW this line!!! **************/
-
+    push {r4-r11, LR}
+    
+    mov r2, 0
+    
+    /***
+     * Check if our LSB is 1 using AND in order to mask other bits
+     * This makes comparison easy, just compare against zero
+     * If the LSB is 1, then add the multiplicand to the initial product
+     * Shift multiplicand left one bit, multiplier right by 1
+    ***/
+    multiply:
+    and r3, r1, 1
+    cmp r3, 0
+    addne r2, r2, r0
+    lsl r0, r0, 1
+    lsr r1, r1, 1
+    
+    /***
+     * If the multiplier has not yet been reduced to zero, we are not done
+     * Loop back to the beginning of our operation
+    ***/
+    cmp r1, 0
+    bne multiply
+    
+    mov r0, r2
+    
+    pop {r4-r11, LR}
+    bx LR
+    
+    zero:
+    mov r0, 0
+    
+    pop {r4-r11, LR}
+    bx LR
 
     /*** STUDENTS: Place your asmMult code ABOVE this line!!! **************/
 
@@ -140,7 +230,26 @@ asmMult:
 asmFixSign:   
     
     /*** STUDENTS: Place your asmFixSign code BELOW this line!!! **************/
-
+    push {r4-r11, LR}
+    /***
+     * If the signs are equal, result will be positive
+     * If not equal, result will be negative
+     * Compare signs to one another, then check if one argument is zero
+     * Zero is considered positive, so a zero result will override negative
+    ***/
+    cmp r1, r2
+    
+    mov r3, 1
+    moveq r3, 0
+    
+    cmp r0, 0
+    moveq r3, 0
+    
+    cmp r3, 1
+    negeq r0, r0
+    
+    pop {r4-r11, LR}
+    bx LR
     
     /*** STUDENTS: Place your asmFixSign code ABOVE this line!!! **************/
 
@@ -165,34 +274,105 @@ asmFixSign:
 asmMain:   
     
     /*** STUDENTS: Place your asmMain code BELOW this line!!! **************/
+    push {r4-r11, LR}
+    
+    /* START initialize to zero */
+    ldr r2, =a_Multiplicand
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =b_Multiplier
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =rng_Error
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =a_Sign
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =b_Sign
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =prod_Is_Neg
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =a_Abs
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =b_Abs
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =init_Product
+    ldr r3, =0
+    str r3, [r2]
+    
+    ldr r2, =final_Product
+    ldr r3, =0
+    str r3, [r2]
+    /* END initialize to zero */
     
     /* Step 1:
      * call asmUnpack. Have it store the output values in a_Multiplicand
      * and b_Multiplier.
-     */
-
-
-     /* Step 2a:
+    */
+    ldr r1, =a_Multiplicand
+    
+    ldr r2, =b_Multiplier
+    
+    bl asmUnpack
+    
+    /* Step 2a:
       * call asmAbs for the multiplicand (a). Have it store the absolute value
       * in a_Abs, and the sign in a_Sign.
-      */
-
-
-
-     /* Step 2b:
+    */
+    ldr r0, =a_Multiplicand
+    ldr r0, [r0]
+    
+    ldr r1, =a_Abs
+    
+    ldr r2, =a_Sign
+    
+    bl asmAbs
+    
+    /* Step 2b:
       * call asmAbs for the multiplier (b). Have it store the absolute value
       * in b_Abs, and the sign in b_Sign.
-      */
-
-
-
+    */
+    
+    ldr r0, =b_Multiplier
+    ldr r0, [r0]
+    
+    ldr r1, =b_Abs
+    
+    ldr r2, =b_Sign
+    
+    bl asmAbs
+    
     /* Step 3:
      * call asmMult. Pass a_Abs as the multiplicand, 
      * and b_Abs as the multiplier.
      * asmMult returns the initial (positive) product in r0.
      * In this function (asmMain), store the output value  
      * returned asmMult in r0 to mem location init_Product.
-     */
+    */
+    
+    ldr r0, =a_Abs
+    ldr r0, [r0]
+    
+    ldr r1, =b_Abs
+    ldr r1, [r1]
+    
+    bl asmMult
+    
+    ldr r2, =init_Product
+    str r0, [r2]
 
 
     /* Step 4:
@@ -201,18 +381,30 @@ asmMain:
      * asmFixSign returns the final product with the correct
      * sign. Store the value returned in r0 to mem location 
      * final_Product.
-     */
+    */
+    
+    ldr r0, [r2]
+    
+    ldr r1, =a_Sign
+    ldr r1, [r1]
+    
+    ldr r2, =b_Sign
+    ldr r2, [r2]
+    
+    bl asmFixSign
+    
+    ldr r1, =final_Product
+    str r0, [r1]
 
 
-     /* Step 5:
+    /* Step 5:
       * END! Return to caller. Make sure of the following:
       * 1) Stack has been correctly managed.
       * 2) the final answer is stored in r0, so that the C call 
       *    can access it.
-      */
-
-
-    
+    */
+    pop {r4-r11, LR}
+    bx LR
     /*** STUDENTS: Place your asmMain code ABOVE this line!!! **************/
 
 
